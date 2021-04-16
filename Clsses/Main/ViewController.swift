@@ -1,29 +1,27 @@
 //
-//  MainSignView.swift
+//  ViewController.swift
 //  ResignForiOS
 //
 //  Created by hanxiaoqing on 2018/1/23.
 //  Copyright © 2018年 cheng. All rights reserved.
 //
 
-
 import Cocoa
 
-public extension NSPasteboard.PasteboardType {
-    static var kUrl: NSPasteboard.PasteboardType {
-        return self.init(kUTTypeURL as String)
-    }
-    static var kFilenames: NSPasteboard.PasteboardType {
-        return self.init("NSFilenamesPboardType")
-    }
-    static var kFileUrl: NSPasteboard.PasteboardType {
-        return self.init(kUTTypeFileURL as String)
-    }
-}
+//public extension NSPasteboard.PasteboardType {
+//    static var kUrl: NSPasteboard.PasteboardType {
+//        return self.init(kUTTypeURL as String)
+//    }
+//    static var kFilenames: NSPasteboard.PasteboardType {
+//        return self.init("NSFilenamesPboardType")
+//    }
+//    static var kFileUrl: NSPasteboard.PasteboardType {
+//        return self.init(kUTTypeFileURL as String)
+//    }
+//}
 
-
-class MainSignView: NSView {
-
+class ViewController: NSViewController {
+    
     let securityPath = "/usr/bin/security"
     let defaults = UserDefaults()
     let fileManager = FileManager.default
@@ -40,7 +38,24 @@ class MainSignView: NSView {
     @IBOutlet var appVersion: NSTextField!
     
     @IBOutlet var StartButton: NSButton!
-    @IBOutlet var StatusLabel: NSTextField!
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        populateProvisioningProfiles()
+        populateCodesigningCerts()
+        
+        setStatus("Ready")
+        
+        let xcsCmd = "/usr/bin/xcode-select"
+        let checkCodeTask = Process().execute(xcsCmd, workingDirectory: nil, arguments: ["-p"])
+        if checkCodeTask.status != 0 {
+            _ = Process().execute(xcsCmd, workingDirectory: nil, arguments: ["--install"])
+            NSApplication.shared.terminate(self)
+        }
+        setStatus("check XCode Task over")
+    }
+  
+
     
     //MARK: Variables
     var provisioningProfiles: [Profile] = ProfileManager().updateProfiles()
@@ -69,35 +84,6 @@ class MainSignView: NSView {
     fileprivate var fileTypeIsOk = false
     
     
-    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        if checkExtension(sender) == true {
-            fileTypeIsOk = true
-            return .copy
-        } else {
-            fileTypeIsOk = false
-            return NSDragOperation()
-        }
-    }
-    
-    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        if fileTypeIsOk {
-            return .copy
-        } else {
-            return NSDragOperation()
-        }
-    }
-    
-    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        let pasteboard = sender.draggingPasteboard
-        if let board = pasteboard.propertyList(forType: .kFilenames) as? NSArray {
-            if let filePath = board[0] as? String {
-                fileDropped(filePath)
-                return true
-            }
-        }
-        return false
-    }
-    
     func checkExtension(_ drag: NSDraggingInfo) -> Bool {
         if let board = drag.draggingPasteboard.propertyList(forType: .kFilenames) as? NSArray,
             let path = board[0] as? String {
@@ -114,23 +100,6 @@ class MainSignView: NSView {
             break
         default: break
         }
-    }
-    
-    override func awakeFromNib() {
-        super.awakeFromNib()
-        
-        populateProvisioningProfiles()
-        populateCodesigningCerts()
-        
-        setStatus("Ready")
-        
-        let xcsCmd = "/usr/bin/xcode-select"
-        let checkCodeTask = Process().execute(xcsCmd, workingDirectory: nil, arguments: ["-p"])
-        if checkCodeTask.status != 0 {
-            _ = Process().execute(xcsCmd, workingDirectory: nil, arguments: ["--install"])
-            NSApplication.shared.terminate(self)
-        }
-        setStatus("check XCode Task over")
     }
     
     
@@ -151,7 +120,7 @@ class MainSignView: NSView {
         if securityResult.output.count < 1 {
             showCodesignCertsErrorAlert()
             return
-        }        
+        }
         codesigningCerts = securityResult.output.split(separator: "\"").map{String($0)}.filter({ $0.contains("Apple")})
         for cert in self.codesigningCerts {
             codeSignCertsPop.addItem(withTitle: cert)
@@ -177,7 +146,6 @@ class MainSignView: NSView {
         if codesigningCerts.count == 0 {
             showCodesignCertsErrorAlert()
         } else {
-            
             NSApplication.shared.windows[0].makeFirstResponder(self)
             let saveDialog = NSSavePanel()
             saveDialog.allowedFileTypes = ["ipa","app"]
@@ -190,7 +158,6 @@ class MainSignView: NSView {
             }
         }
     }
-    
     
     @objc func signingThread() {
         
@@ -240,10 +207,8 @@ class MainSignView: NSView {
     //MARK: IBActions
     @IBAction func chooseProvisioningProfile(_ sender: NSPopUpButton) {
         if sender.indexOfSelectedItem == 0 {
-//            newBundleIDField.isEditable = true
             newBundleIDField.stringValue = ""
         } else {
-//            newBundleIDField.isEditable = false
             currSelectProfile = provisioningProfiles[sender.indexOfSelectedItem-1]
             for matchCer in currSelectProfile?.developerCertificates ?? [""] {
                 if matchCer != "" && codesigningCerts.contains(matchCer) {
@@ -287,26 +252,15 @@ class MainSignView: NSView {
     @IBAction func openLogFile(_ sender: Any) {
         NSWorkspace.shared.openFile(Log.logName)
     }
-    
-    
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        registerForDraggedTypes([.string, .tiff, .kUrl, .kFilenames])
-    }
-    
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        registerForDraggedTypes([.string, .tiff, .kUrl, .kFilenames])
-    }
-    
 }
 
-extension MainSignView: CodeSignDelegate {
+
+extension ViewController: CodeSignDelegate {
     
     func codeSignBegin(workingDir: String) {
         setStatus("CodeSign begin with workingDir: \(workingDir)")
         DispatchQueue.main.async {
-            let hud = HProgregressHUD.showHUDAddedTo(view: self, animated: true)
+            let hud = HProgregressHUD.showHUDAddedTo(view: self.view, animated: true)
             hud.label.stringValue = "CodeSigning"
         }
     }
@@ -318,7 +272,7 @@ extension MainSignView: CodeSignDelegate {
     func codeSignError(errDes: String, tempDir: String) {
         setStatus(errDes)
         DispatchQueue.main.async {
-            HProgregressHUD.HUDFor(view: self)?.hideAnimated(true)
+            HProgregressHUD.HUDFor(view: self.view)?.hideAnimated(true)
         }
         cleanup(tempDir)
     }
@@ -326,7 +280,7 @@ extension MainSignView: CodeSignDelegate {
     func codeSigneEndSuccessed(outPutPath: String, tempDir: String) {
         cleanup(tempDir)
         DispatchQueue.main.async {
-            HProgregressHUD.HUDFor(view: self)?.hideAnimated(true)
+            HProgregressHUD.HUDFor(view: self.view)?.hideAnimated(true)
         }
         setStatus("CodeSigneEndSuccessed, output at \(outPutPath)")
     }

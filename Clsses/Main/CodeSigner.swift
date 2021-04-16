@@ -2,8 +2,8 @@
 //  CodeSigner.swift
 //  ResignForiOS
 //
-//  Created by hanxiaoqing on 2018/1/23.
-//  Copyright © 2018年 cheng. All rights reserved.
+//  Created by Roger on 2021/4/16.
+//  Copyright © 2021 cheng. All rights reserved.
 //
 
 
